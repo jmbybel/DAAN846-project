@@ -1,0 +1,279 @@
+---
+title: "2009 Cocaine Smugglers in Madrid"
+output: pdf_document
+---
+
+if needed
+install.packages("statnet", dependencies = TRUE)
+install.packages("keyplayer", dependencies = TRUE)
+install.packages("animation", dependencies = TRUE)
+
+```{r}
+library(igraph)
+library(keyplayer)
+```
+
+Data set: Cocaine Smuggling
+https://sites.google.com/site/ucinetsoftware/datasets/covert-networks/cocainesmuggling
+
+DESCRIPTION: Data refers to four groups involved in cocaine trafficking in Spain. Information comes from police wiretapping and meetings registered by police investigations of these criminal organisations between 2007 and 2009.
+
+Operation JUANES (N=51). In 2009, the police investigation detected a group involved in the smuggling of cocaine from Mexico to be distributed in Madrid (Spain). In this case, the group operated in close cooperation with another organization that was laundering the illegal income from drug distribution from this and other groups. The cocaine traffickers earned an estimated EUR 60 million.
+
+
+I will be looking specifically at the Operation Juanes graph.
+
+DATA: 51 node network, Undirected, valued ties.
+This data set is an undirected network comprised of communications between members of the smuggling ring.
+
+My first objective will be to identify which actors' removal would have the most fragmenting effect on the network.
+My second objective will be to identify actors who are most tightly involved with the core of the network, to become informants or simply to be targets of a wiretap/bug.
+
+
+
+```{r}
+setwd("D:\\r\\project\\cocaine\\CSV")
+cocainetable<- as.matrix(read.csv("COCAINE_JUANES.csv",header=TRUE,row.names=1,check.names=FALSE))
+
+```
+
+First, convert the loaded table into an adjacency matrix, and get a basic topography of the network, to assure it loaded correctly.
+
+```{r}
+
+
+cocaine_graph <- graph_from_adjacency_matrix(cocainetable, mode="undirected")
+
+nodeCount <- length(V(cocaine_graph))
+cocaine_graph_distance <- mean_distance(cocaine_graph)
+cocaine_graph_diameter <- diameter(cocaine_graph)
+cocaine_topo <- matrix(c(nodeCount, cocaine_graph_distance,cocaine_graph_diameter), nrow=1,ncol=3)
+colnames(cocaine_topo) <- c('Size', 'Average Distance', 'Diameter')
+cocaine_topo
+```
+
+all 51 nodes are accounted for. And we obtain some basic information about the average distance and diameter.
+
+Before starting to plot out the network, I would like some sense of the centralization of the graph
+
+```{r}
+
+cocaine_graph.deg_centrality <- centralization.degree(cocaine_graph)$centralization
+cocaine_graph.sd_deg_cent <- sd(centralization.degree(cocaine_graph)$res)
+
+cocaine_graph.closeness <- centralization.closeness(cocaine_graph)$centralization
+cocaine_graph.closeness_sd <- sd(centralization.closeness(cocaine_graph)$res)
+
+cocaine_graph.betweenness <- centralization.betweenness(cocaine_graph)$centralization
+cocaine_graph.betweenness_sd <- sd(centralization.betweenness(cocaine_graph)$res)
+
+centralizationscore <- matrix(c(cocaine_graph.deg_centrality,cocaine_graph.sd_deg_cent,cocaine_graph.closeness,cocaine_graph.closeness_sd,cocaine_graph.betweenness,cocaine_graph.betweenness_sd), nrow=1, ncol=6)
+colnames(centralizationscore) <- c('degree centralization', 'degree SD', 'closeness centralization', 'closeness SD', 'betweenness', 'betweeness SD')
+centralizationscore
+```
+Low centralization scores all around suggest that the network does not hinge concentrated on a single individual
+
+There is an exceptionally large standard deviation on the betweenness centralization. I take that to imply that while most of the graph is loosely connected, a section of it is very highly connected.
+
+And density measures for completion.
+```{r}
+cocaine_density <- edge_density(cocaine_graph)
+average_degree <- mean(degree(cocaine_graph))
+cohesion_cg <- cohesion(cocaine_graph)
+compactness_cg <- mean(closeness(cocaine_graph))
+global_clust <- transitivity(cocaine_graph, type="global")
+interconnectedness_cg <- matrix(c(cocaine_density,average_degree,cohesion_cg,compactness_cg,global_clust), nrow=1,ncol=5)
+colnames(interconnectedness_cg) <- c('Density', 'Average degree', 'cohesion', 'compactness', 'clustering coefficient')
+interconnectedness_cg
+```
+on average, we have each node connecting to 3.6 others, and all actors are connected.
+It is, overall, not a particuarly dense graph, and not very compact. However there is a somewhat larger global clustering coefficient, which would suggest an unusually dense portion of the network.
+
+
+
+Now plot out the graph to see what is obvious at a glance
+```{r}
+saved_layout <- layout_with_fr(cocaine_graph)
+plot(cocaine_graph,layout=saved_layout, vertex.size=8, main="Initial Graph")
+
+```
+
+Immediately, the EHJ node stands out as a significant articulation point. Another obvious one, though not as significant, is the JJLH node. Details about that one will be discussed later.
+
+I examine the graph for any subgroups of significance. First I obtain the largest cliques within the graph to see if any specific nodes turn up often.
+Second I will colorize the graph with the nodes' coreness, and see if there are any major similarities to the data from the cliques.
+
+```{r}
+
+cocaine_cliques <- largest_cliques(cocaine_graph)
+cocaine_cliques
+
+```
+
+
+```{r}
+plot(cocaine_graph, layout=saved_layout, vertex.color = graph.coreness(cocaine_graph), main="Colored by Corenss")
+
+```
+
+Colorizing the graph with graph.coreness displays a lot of extra information. The most tightly related actors are in green, and I  expect these are the directors of the operation, and primarily who should be targetted for heavy surveillance. Most of the blue actors seem to be in a major role, but aren't nearly as well-connected as the green group. The gold nodes connected to blues are the least significant figures, being most distant from that tight knit group.
+
+All except one of the largest cliques deal with the OJSR node. This node likely deals with a significant amount of information and would be a worhtwhile target for conversion to an informant, or surveillance. OAMS and LGM also show up often.
+The only clique that did not contain OJSR is connected to OJSR via RJZZ. RJZZ may make a good backup if OJSR could not be directly targetted
+
+Sizing the vertices according to their centrality scores further highlights the signficance of OJSR:
+
+```{r}
+
+
+cocaine_graph.deg_cent <- centralization.degree(cocaine_graph)$res
+plot(cocaine_graph,layout=saved_layout,vertex.size=cocaine_graph.deg_cent,main="Sized by Degree Centrality")
+
+cocaine_graph.eigen_cent <- eigen_centrality(cocaine_graph)$vector
+plot(cocaine_graph,layout=saved_layout,vertex.size=cocaine_graph.eigen_cent*20,main="Eigenvector Centrality")
+
+cocaine_graph.closeness_cent <- centralization.closeness(cocaine_graph)$res
+plot(cocaine_graph,layout=saved_layout,vertex.size=cocaine_graph.closeness_cent*15, main="Betweenness Centrality")
+
+
+```
+
+All 3 centrality scores highlight the significance of the OJSR node as well as many of the ones it directly connects to. the EHJ node has some significance, and the JJLH node has some significance only in degree centrality. The RMP and LGM nodes also stand out a bit.
+
+This chunk creates an ego graph for the OJSR node, highlighting the number of direct connections that it has, as well as showing that for most of these, the network is hardened against a simple removal of just OJSR - only two nodes, CMP and JHRR, have no direct connection to the rest of the group.
+
+```{r}
+egograph <- make_ego_graph(cocaine_graph,nodes=V(cocaine_graph)['OJSR'], order=1)
+
+for(x in egograph) {
+  V(x)$color <- 'light blue'
+  V(x)['OJSR']$color<- 'gold'
+  plot(x);
+}
+```
+
+The combination between the clique and the coreness data, plus the noted redundancy, points to the value of taking information-related actions against OJSR as opposed to just removing this actor.
+
+A histogram is used to determine if there is another subgroup that should have actions taken against them, with an aim of compromising the whole network.
+```{r}
+
+simple_cocaine <- simplify(cocaine_graph)
+betweenness_one <- edge.betweenness.community(simple_cocaine)
+plot(as.dendrogram(betweenness_one))
+```
+
+The dendrogram indicates that there are 3 major subgroups to this network. We've already identified a way to isolate the one shown on the right of the dendrogram via removing EHJ, and actions agains the first can be taken by actions against OJSR.
+
+Disrupting the middle portion will take a bit of extra analysis. I will run a key player analysis and see if I can target that particular cluster. A review of the previous graph seems to indicate that disrupting both LGM and RMP will have a major impact on that subgroup.
+
+```{r}
+aMatrix <- as.matrix(get.adjacency(cocaine_graph))
+cocaine_graph.fragments <- kpset(aMatrix, size=4, type="fragment")
+V(cocaine_graph)$color<- "light blue"
+V(cocaine_graph)$color[cocaine_graph.fragments$keyplayers]<- "orange"
+plot(cocaine_graph, mark.groups=cocaine_graph$keyplayers, layout=saved_layout)
+
+```
+A key player size of 4 confirms everything summarized at this point. RMP and LGM (in addition to previously established EHJ) can be targetted to sever this group from the core of the network, and OJSR is highlighted as a key player yet again.
+
+Raising the key player size to 5 results in JJLH being highlighted, but recommended actions against LGN, RMP, and EHJ would have separated that subgroup from the main component already. 
+
+We will also do an edge betweenness check to see if our information is correct so far. 
+```{r}
+cocaine_graph.edge_bet <- edge_betweenness(cocaine_graph)
+cocaine_graph.edge_bet.sorted <- sort(cocaine_graph.edge_bet, decreasing=TRUE)[1:8]
+cocaine_graph.edge_bet.index <- which(cocaine_graph.edge_bet %in% cocaine_graph.edge_bet.sorted)
+E(cocaine_graph)$width<-1
+E(cocaine_graph)$width[cocaine_graph.edge_bet.index]<-5
+plot(cocaine_graph, vertex.size=7, layout=saved_layout)
+
+```
+
+Edge betweenness is in agreement with the previous work, highlighting the value of EHJ , OJSR, and LGM. In addition, it again highlights the path toward JJLH, which as stated before, would be interrupted by the removal of EHJ. Notably, this does NOT indicate any particularly valuable edge betweenness for the RMP node, which was previously highlighted for removal to fracture the network.
+
+
+Deleting the EHJ, RMP, and LGM nodes (to represent various neutralization activities) results in a network that is fragmented into 6 pieces - 3 larger chunks and 3 disconnected nodes
+
+```{r}
+
+fragmented_cocaine_graph1 <- delete_vertices(cocaine_graph, c(V(cocaine_graph)['EHJ']))
+fragmented_cocaine_graph2 <- delete_vertices(fragmented_cocaine_graph1, c(V(fragmented_cocaine_graph1)['LGM']))
+
+plot(fragmented_cocaine_graph1, vertex.size=8)
+plot(fragmented_cocaine_graph2, vertex.size=8)
+
+final_removals <- c(V(fragmented_cocaine_graph2)['RMP'])
+fragmented_cocaine_graph3 <- delete_vertices(fragmented_cocaine_graph2, final_removals)
+
+
+plot(fragmented_cocaine_graph3, vertex.size=8)
+
+```
+Actions can be taken against RJZZ and either V or CAPV in order to further fragment the main component, which will rapidly reduce it to the OJSR ego map seen earlier, plus a few extensions.
+
+```{r}
+
+fragmented_cocaine_graph4 <- delete_vertices(fragmented_cocaine_graph3, c(V(fragmented_cocaine_graph3)['RJZZ'], V(fragmented_cocaine_graph3)['V']))
+
+
+
+plot(fragmented_cocaine_graph4, vertex.size=8)
+
+```
+
+
+now to put together a visualizer showing the entire process.
+will be using the Imagemagick gif maker.
+```{r}
+
+
+library(animation)
+ani.options(convert="C:\\Progra~1\\ImageMagick-7.0.7-Q16\\magick.exe")
+
+#reset some parameters that the graphs were using
+E(cocaine_graph)$width<-1
+E(fragmented_cocaine_graph1)$width<-1
+E(fragmented_cocaine_graph2)$width<-1
+E(fragmented_cocaine_graph3)$width<-1
+E(fragmented_cocaine_graph4)$width<-1
+
+#just manually reset then re-color the graphs
+V(cocaine_graph)$color<- "light blue"
+  V(cocaine_graph)['OJSR']$color<- "gold"
+  V(cocaine_graph)['EHJ']$color<- "red"
+V(fragmented_cocaine_graph1)$color<- "light blue"
+  V(fragmented_cocaine_graph1)['OJSR']$color<- "gold"
+  V(fragmented_cocaine_graph1)['LGM']$color<- "red"
+V(fragmented_cocaine_graph2)$color<- "light blue"
+  V(fragmented_cocaine_graph2)['OJSR']$color<- "gold"
+  V(fragmented_cocaine_graph2)['RMP']$color<- "red"
+V(fragmented_cocaine_graph3)$color<- "light blue"
+  V(fragmented_cocaine_graph3)['OJSR']$color<- "gold"
+  V(fragmented_cocaine_graph3)['RJZZ']$color<- "red"
+  V(fragmented_cocaine_graph3)['V']$color<- "red"
+V(fragmented_cocaine_graph4)$color<- "light blue"
+  V(fragmented_cocaine_graph4)['OJSR']$color<- "gold"
+
+
+saveGIF({
+  plot(cocaine_graph, vertex.size=8)
+  plot(fragmented_cocaine_graph1, vertex.size=8)
+  plot(fragmented_cocaine_graph2, vertex.size=8)
+  plot(fragmented_cocaine_graph3, vertex.size=8)
+  plot(fragmented_cocaine_graph4, vertex.size=8)
+  
+  
+}, interval=4, movie.name="D:\\r\\project\\cocaine\\animation.gif")
+
+
+
+```
+
+
+
+
+
+
+
+
+
