@@ -11,4 +11,6 @@ That core group however was so strongly knit that the group would survive remova
 
 The project was done within R Studio, so the raw R code is mixed within notes and details on the process (thus R notebook...). 
 
-Due to the images being stitched together at the end, to run it as is would require an installation of ImageMagick (7.0.7-Q16) and a copy of the CSV --  found here as noted in the project itself:  https://sites.google.com/site/ucinetsoftware/datasets/covert-networks/cocainesmuggling
+Due to the images being stitched together at the end, to run it as is would require an installation of ImageMagick (7.0.7-Q16) and a copy of the CSV --  found here as noted in the project itself:  [https://sites.google.com/site/ucinetsoftware/datasets/covert-networks/cocainesmuggling](https://sites.google.com/site/ucinetsoftware/datasets/covert-networks/cocaine-smuggling?authuser=0)
+
+Specifically this is referencing the operation JUANES dataset
